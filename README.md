@@ -1,13 +1,15 @@
 # SQL Master — practice SQL like LeetCode
 
-![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
-![PGlite](https://img.shields.io/badge/PGlite-Postgres_WASM-4169E1?logo=postgresql&logoColor=white)
-![CodeMirror](https://img.shields.io/badge/CodeMirror-6-D30707?logo=codemirror&logoColor=white)
-![Dexie](https://img.shields.io/badge/Dexie-IndexedDB-EE6E73?logo=databricks&logoColor=white)
-![Zod](https://img.shields.io/badge/Zod-4-3E67B1?logo=zod&logoColor=white)
+<p align="center">
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-19-20232A?logo=react&logoColor=61DAFB">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
+  <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white">
+  <img alt="PGlite" src="https://img.shields.io/badge/PGlite-Postgres_WASM-4169E1?logo=postgresql&logoColor=white">
+  <img alt="CodeMirror" src="https://img.shields.io/badge/CodeMirror-6-D30707?logo=codemirror&logoColor=white">
+  <img alt="Dexie" src="https://img.shields.io/badge/Dexie-IndexedDB-EE6E73">
+  <img alt="Zod" src="https://img.shields.io/badge/Zod-4-3E67B1?logo=zod&logoColor=white">
+</p>
 
 A browser-based SQL learning platform. Pick a problem, write PostgreSQL, run it
 against a **real Postgres running in your browser** (PGlite/WASM), and get instant
