@@ -1,5 +1,14 @@
 # SQL Master — practice SQL like LeetCode
 
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
+![PGlite](https://img.shields.io/badge/PGlite-Postgres_WASM-4169E1?logo=postgresql&logoColor=white)
+![CodeMirror](https://img.shields.io/badge/CodeMirror-6-D30707?logo=codemirror&logoColor=white)
+![Dexie](https://img.shields.io/badge/Dexie-IndexedDB-EE6E73?logo=databricks&logoColor=white)
+![Zod](https://img.shields.io/badge/Zod-4-3E67B1?logo=zod&logoColor=white)
+
 A browser-based SQL learning platform. Pick a problem, write PostgreSQL, run it
 against a **real Postgres running in your browser** (PGlite/WASM), and get instant
 pass/fail feedback — plus a multi-turn AI tutor that coaches you toward the answer
@@ -18,7 +27,8 @@ works fully offline.
   and column names).
 - 🎓 **Multi-turn AI tutor.** Streamed hints, error explanations, and query reviews.
   Ask follow-ups or click *Show me the answer* — it guides first, reveals only when
-  you explicitly ask. Backed by IBM Consulting Advantage (optional; see below).
+  you explicitly ask. Works with any OpenAI-compatible or Anthropic model (optional;
+  see below).
 - 🧭 **31 problems + 7 learning paths.** Curated LeetCode-style problems grouped into
   guided paths (joins, aggregation, window functions, recursion, …), filterable by
   topic and difficulty.
@@ -28,11 +38,6 @@ works fully offline.
 - 📖 **SQL cheatsheet** at `/cheatsheet` for quick syntax reference.
 - 💾 **Local-first progress.** Solved/attempted status and custom problems are saved
   in your browser (IndexedDB) — nothing leaves your machine.
-
-## Tech stack
-
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 ·
-[PGlite](https://pglite.dev) (Postgres WASM) · CodeMirror 6 · Dexie (IndexedDB) · Zod
 
 ## Quick start
 
@@ -46,25 +51,42 @@ That's it — all 31 problems are fully playable without any configuration.
 
 ### Enable the AI tutor (optional)
 
-The tutor is proxied server-side through **IBM Consulting Advantage (ICA)**, whose
-OpenAI-compatible API keeps your key off the client. Copy the example env file and
-fill it in:
+The tutor is proxied server-side so your API key never reaches the browser. It works
+with **any OpenAI-compatible chat API** or with **Anthropic** — pick whichever you
+have a key for. Copy the example env file and fill in four variables:
 
 ```bash
 cp .env.local.example .env.local
 ```
 
+**Option A — OpenAI-compatible** (OpenAI, Azure OpenAI, OpenRouter, local servers,
+gateways… anything exposing `/chat/completions`):
+
 ```ini
 # .env.local
-ICA_API_KEY=your-ica-developer-key
-ICA_BASE_URL=https://api.nextgen-beta.ica.ibm.com/ica/v1
-ICA_MODEL=claude-opus-4-8          # model for reviews / error explanations
-ICA_MODEL_LIGHT=claude-haiku-4-5   # optional: cheaper model for one-off hints
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-...
+LLM_BASE_URL=https://api.openai.com/v1   # your endpoint's base URL
+LLM_MODEL=gpt-4o                         # model for reviews / error explanations
+LLM_MODEL_LIGHT=gpt-4o-mini              # optional: cheaper model for one-off hints
 ```
 
-Get a developer key from the ICA UI (*Settings → API Keys → ICA APIs*) and find valid
-model IDs via `GET /chat-models/models`. Then restart `npm run dev`. Without a key the
-tutor panel simply shows a "not configured" message and everything else keeps working.
+**Option B — Anthropic** (Messages API):
+
+```ini
+# .env.local
+LLM_PROVIDER=anthropic
+LLM_API_KEY=sk-ant-...
+LLM_BASE_URL=https://api.anthropic.com/v1
+LLM_MODEL=claude-opus-4-8
+LLM_MODEL_LIGHT=claude-haiku-4-5
+```
+
+The route appends the provider's standard path (`/chat/completions` for OpenAI,
+`/messages` for Anthropic), so `LLM_BASE_URL` is just the API root — any
+OpenAI-compatible gateway works by pointing it at that gateway's base URL. Then
+restart `npm run dev`. Without a key the tutor panel simply shows a "not configured"
+message and everything else keeps working.
 
 ## How it works
 
