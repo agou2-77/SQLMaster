@@ -53,3 +53,4 @@ body {
 .markdown table { border-collapse: collapse; margin: 0.5em 0; }
 .markdown th,
 .markdown td { border: 1px solid rgba(120, 120, 120, 0.3); padding: 0.25rem 0.5rem; }
+.markdown th { background: rgba(120, 120, 120, 0.12); text-align: left; }

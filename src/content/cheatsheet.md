@@ -6,35 +6,6 @@ A comprehensive, example-driven reference — organized so you learn **when to r
 
 ---
 
-## Table of contents
-
-1. [The one thing to understand first: logical execution order](#1-logical-execution-order)
-2. [The example schema (used throughout)](#2-example-schema)
-3. [SELECT — the basics](#3-select-basics)
-4. [WHERE — filtering rows](#4-where-filtering-rows)
-5. [NULL — the three-valued logic trap](#5-null-handling)
-6. [ORDER BY & LIMIT — sorting and paging](#6-order-by--limit)
-7. [Aggregation — GROUP BY & HAVING](#7-aggregation)
-8. [JOINs — combining tables](#8-joins)
-9. [Subqueries & derived tables](#9-subqueries)
-10. [CTEs — WITH (incl. recursive)](#10-ctes)
-11. [Window functions](#11-window-functions)
-12. [Set operations — UNION / INTERSECT / EXCEPT](#12-set-operations)
-13. [CASE & conditional logic](#13-case)
-14. [Strings](#14-strings)
-15. [Numbers & math](#15-numbers)
-16. [Dates & times](#16-dates)
-17. [Data types & casting](#17-types)
-18. [Modifying data — INSERT / UPDATE / DELETE / UPSERT](#18-dml)
-19. [Defining tables — DDL, constraints, indexes, views](#19-ddl)
-20. [Transactions](#20-transactions)
-21. [Performance & indexing](#21-performance)
-22. [Dialect differences](#22-dialect-differences)
-23. [Classic problem recipes](#23-recipes)
-24. [Top gotchas (quick list)](#24-gotchas)
-
----
-
 <a name="1-logical-execution-order"></a>
 ## 1. The one thing to understand first: logical execution order
 
@@ -53,12 +24,16 @@ You *write* a query in one order, but the database *evaluates* it in another. Kn
 
 **Consequences you'll hit constantly:**
 
-- `WHERE` **cannot** reference a `SELECT` alias (WHERE runs before SELECT). `ORDER BY` **can** (it runs after).
+- `WHERE` **cannot** reference a `SELECT` alias (WHERE runs before SELECT). `ORDER BY` **can** (it runs after). Three separate statements:
   ```sql
-  SELECT amount * 0.1 AS tax FROM orders
-  WHERE tax > 5;        -- ❌ error: "tax" doesn't exist yet
-  WHERE amount * 0.1 > 5 -- ✅ repeat the expression
-  ORDER BY tax;          -- ✅ alias is fine here
+  -- ❌ WHERE runs before SELECT, so the alias doesn't exist yet:
+  SELECT amount * 0.1 AS tax FROM orders WHERE tax > 5;       -- error: column "tax" does not exist
+
+  -- ✅ Repeat the expression in WHERE:
+  SELECT amount * 0.1 AS tax FROM orders WHERE amount * 0.1 > 5;
+
+  -- ✅ ORDER BY runs after SELECT, so the alias is fine here:
+  SELECT amount * 0.1 AS tax FROM orders ORDER BY tax;
   ```
 - Use `WHERE` to filter **individual rows**; use `HAVING` to filter **aggregated groups**. (See §7.)
 - A window function (§11) is computed at the `SELECT` step, so it **can't** appear in `WHERE` — wrap the query in a subquery/CTE to filter on it.
@@ -67,6 +42,8 @@ You *write* a query in one order, but the database *evaluates* it in another. Kn
 
 <a name="2-example-schema"></a>
 ## 2. The example schema (used throughout)
+
+Every example below runs against this small dataset. The worked **Result:** tables in later sections are the *actual* output of running the query on exactly these rows — so you can trace them by hand.
 
 ```sql
 categories(id, name)
@@ -78,6 +55,53 @@ employees(id, name, department_id → departments.id, salary, manager_id → emp
 ```
 
 `employees.manager_id` points back to `employees.id` (a self-reference — used for the org-chart examples).
+
+**departments**
+
+| id | name |
+|---:|------|
+| 1 | Engineering |
+| 2 | Sales |
+| 3 | Marketing |
+
+*(Marketing has no employees — this powers the LEFT JOIN / "groups with zero rows" examples.)*
+
+**employees**
+
+| id | name | department_id | salary | manager_id | hire_date |
+|---:|------|--------------:|-------:|-----------:|-----------|
+| 1 | Ada  | 1 | 120000 | NULL | 2019-03-01 |
+| 2 | Bji  | 1 |  90000 | 1    | 2020-06-15 |
+| 3 | Cleo | 2 |  90000 | 1    | 2021-01-20 |
+| 4 | Dee  | 2 |  80000 | 3    | 2022-09-10 |
+| 5 | Eli  | 1 |  NULL  | 1    | 2023-02-01 |
+
+*(Ada has no manager → recursive-CTE base case. Bji & Cleo tie at 90000 → RANK vs DENSE_RANK. Eli's salary is NULL → "aggregates ignore NULLs" and NULL ordering.)*
+
+**customers**
+
+| id | name | city | signup_date |
+|---:|------|------|-------------|
+| 1 | Ada  | NYC | 2023-01-05 |
+| 2 | Bji  | LA  | 2023-02-10 |
+| 3 | Cleo | NYC | 2023-06-20 |
+| 4 | Dee  | SF  | 2024-01-15 |
+
+**orders**
+
+| id | customer_id | order_date | amount | status |
+|---:|------------:|------------|-------:|--------|
+| 101 | 1 | 2024-01-10 | 100.00 | paid |
+| 102 | 1 | 2024-02-14 | 250.00 | paid |
+| 103 | 2 | 2024-02-20 |  80.00 | pending |
+| 104 | 3 | 2024-03-01 | 300.00 | paid |
+| 105 | 3 | 2024-03-05 |  50.00 | cancelled |
+
+*(Dee (customer 4) has no orders → anti-join demo. Ada & Cleo have multiple orders; statuses span paid/pending/cancelled.)*
+
+**categories** `(1, 'Books'), (2, 'Toys')` — **products** `(1,'SQL Guide',1,39.00), (2,'Novel',1,15.00), (3,'Blocks',2,25.00)`.
+
+> **Illustrative tables:** a few sections use throwaway tables that don't fit the shared schema — `daily_sales` (§11), `accounts` (§20), `inventory`/`archive_orders` (§18), `seq` and `users` (§23). They're marked where they appear and aren't part of the dataset above.
 
 ---
 
@@ -97,6 +121,18 @@ SELECT DISTINCT ON (customer_id) *       -- PG: first row per customer_id
 - **`SELECT *` — when to avoid:** in stored queries/views/app code it breaks when columns change and fetches more than you need. Great for quick exploration only.
 - **`DISTINCT` vs `GROUP BY`:** `DISTINCT` just dedupes; `GROUP BY` dedupes *and* lets you aggregate per group. If you're only removing duplicates, use `DISTINCT`.
 - **`DISTINCT ON (cols)` `PG`:** keeps the first row per group given an `ORDER BY` — a concise "latest row per key" (see §23).
+
+Worked example — the `DISTINCT ON (customer_id)` query above keeps each customer's **most recent** order (highest `order_date`):
+
+**Result:**
+
+| id | customer_id | order_date | amount | status |
+|---:|------------:|------------|-------:|--------|
+| 102 | 1 | 2024-02-14 | 250.00 | paid |
+| 103 | 2 | 2024-02-20 |  80.00 | pending |
+| 105 | 3 | 2024-03-05 |  50.00 | cancelled |
+
+Customer 4 (Dee) has no orders, so she doesn't appear.
 
 ---
 
@@ -147,13 +183,30 @@ NULL + 5         -- → NULL (arithmetic propagates NULL)
 ```
 
 **The #1 NULL bug — `NOT IN` with a NULL in the list returns *no rows*:**
+
+Ask "which employees are nobody's manager?" The `manager_id` column contains a NULL (Ada has no manager), and that single NULL poisons the whole `NOT IN`:
 ```sql
--- If ANY value returned here is NULL, the whole NOT IN is never true → 0 rows.
-SELECT * FROM products WHERE category_id NOT IN (SELECT category_id FROM discontinued);
--- ✅ Fix: use NOT EXISTS instead
-SELECT * FROM products p
-WHERE NOT EXISTS (SELECT 1 FROM discontinued d WHERE d.category_id = p.category_id);
+SELECT name FROM employees
+WHERE id NOT IN (SELECT manager_id FROM employees);   -- ⚠️ manager_id has a NULL → 0 rows
 ```
+
+**Result:** *(no rows)* — because `id NOT IN (1, 3, NULL)` is never definitively true.
+
+```sql
+-- ✅ Fix: use NOT EXISTS (NULL-safe)
+SELECT e.name FROM employees e
+WHERE NOT EXISTS (SELECT 1 FROM employees m WHERE m.manager_id = e.id);
+```
+
+**Result:**
+
+| name |
+|------|
+| Bji |
+| Dee |
+| Eli |
+
+(Ada and Cleo *are* managers — ids 1 and 3 appear in `manager_id` — so they're correctly excluded.)
 
 **NULL-handling functions:**
 
@@ -165,7 +218,7 @@ WHERE NOT EXISTS (SELECT 1 FROM discontinued d WHERE d.category_id = p.category_
 | `a IS NOT DISTINCT FROM b` `PG` | NULL-safe `=` | join/filter where NULL should match NULL |
 
 - **Aggregates ignore NULLs:** `AVG(salary)` skips NULL salaries; `COUNT(col)` counts non-NULLs, but `COUNT(*)` counts all rows.
-- **`ORDER BY`:** NULLs sort last by default on `DESC` in Postgres; control with `NULLS FIRST` / `NULLS LAST`.
+- **`ORDER BY`:** Postgres treats NULLs as *larger* than any non-NULL value, so by default they sort **last** with `ASC` and **first** with `DESC`. Override with `NULLS FIRST` / `NULLS LAST`.
 
 ---
 
@@ -196,7 +249,7 @@ LIMIT 10 OFFSET 20;                  -- rows 21–30 (page 3 of 10)
 Aggregates collapse many rows into one summary value.
 
 ```sql
-SELECT c.name, d.name AS dept,
+SELECT d.name AS dept,
        COUNT(*)              AS n_employees,
        ROUND(AVG(salary), 2) AS avg_salary,
        MAX(salary)           AS top_salary
@@ -204,6 +257,13 @@ FROM employees e
 JOIN departments d ON d.id = e.department_id
 GROUP BY d.name;
 ```
+
+**Result:** (Marketing has no employees, so the INNER JOIN drops it; `AVG` skips Eli's NULL salary)
+
+| dept | n_employees | avg_salary | top_salary |
+|------|------------:|-----------:|-----------:|
+| Engineering | 3 | 105000.00 | 120000.00 |
+| Sales | 2 | 85000.00 | 90000.00 |
 
 | Function | Notes |
 |----------|-------|
@@ -225,9 +285,15 @@ SELECT customer_id, COUNT(*) AS orders, SUM(amount) AS total
 FROM orders
 WHERE status = 'paid'          -- keep only paid rows first
 GROUP BY customer_id
-HAVING COUNT(*) > 3            -- then keep customers with >3 paid orders
+HAVING COUNT(*) >= 2           -- then keep customers with 2+ paid orders
 ORDER BY total DESC;
 ```
+
+**Result:** paid orders are 101/102 (Ada) and 104 (Cleo); only Ada has ≥ 2:
+
+| customer_id | orders | total |
+|------------:|-------:|------:|
+| 1 | 2 | 350.00 |
 
 **`FILTER` — conditional aggregation** `PG` (cleaner than `SUM(CASE WHEN …)`):
 ```sql
@@ -237,6 +303,12 @@ SELECT
   SUM(amount) FILTER (WHERE status = 'paid') AS paid_revenue
 FROM orders;
 ```
+
+**Result:** one summary row over all 5 orders (3 are paid: 100 + 250 + 300):
+
+| all_orders | paid | paid_revenue |
+|-----------:|-----:|-------------:|
+| 5 | 3 | 650.00 |
 
 ---
 
@@ -267,6 +339,13 @@ FROM customers c
 LEFT JOIN orders o ON o.customer_id = c.id
 WHERE o.id IS NULL;         -- no order matched → customer never ordered
 ```
+
+**Result:** Dee (customer 4) has no rows in `orders`, so the LEFT JOIN fills `o.id` with NULL and the filter keeps only her:
+
+| id | name | city | signup_date |
+|---:|------|------|-------------|
+| 4 | Dee | SF | 2024-01-15 |
+
 (Equivalent to `NOT EXISTS`; both are idiomatic.)
 
 **⚠️ Row multiplication:** if one left row matches many right rows, the left row is repeated. If you `SUM` after such a join you can double-count. Aggregate the many-side in a subquery first, or use a correlated subquery.
@@ -368,6 +447,16 @@ WITH RECURSIVE chain AS (
 SELECT level, name FROM chain ORDER BY level, name;
 ```
 
+**Result:** Ada (no manager) is level 1; her reports are level 2; Dee reports to Cleo, so she's level 3:
+
+| level | name |
+|------:|------|
+| 1 | Ada |
+| 2 | Bji |
+| 2 | Cleo |
+| 2 | Eli |
+| 3 | Dee |
+
 ---
 
 <a name="11-window-functions"></a>
@@ -395,19 +484,38 @@ Anatomy: `func() OVER (PARTITION BY … ORDER BY … <frame>)`
 | Aggregate | `SUM/AVG/COUNT/MIN/MAX OVER (…)` | running totals, moving averages |
 
 **ROW_NUMBER vs RANK vs DENSE_RANK** (ties on the ORDER BY value):
+```sql
+SELECT name, salary,
+       ROW_NUMBER() OVER (ORDER BY salary DESC) AS row_number,
+       RANK()       OVER (ORDER BY salary DESC) AS rank,
+       DENSE_RANK() OVER (ORDER BY salary DESC) AS dense_rank
+FROM employees
+WHERE salary IS NOT NULL;
 ```
-salary: 100  90  90  80
-ROW_NUMBER:  1   2   3   4     -- always unique
-RANK:        1   2   2   4     -- ties share, next skips
-DENSE_RANK:  1   2   2   3     -- ties share, next does NOT skip
-```
+
+**Result:** Bji & Cleo tie at 90000 — watch how each function treats the tie and what comes *after* it:
+
+| name | salary | row_number | rank | dense_rank |
+|------|-------:|-----------:|-----:|-----------:|
+| Ada  | 120000 | 1 | 1 | 1 |
+| Bji  |  90000 | 2 | 2 | 2 |
+| Cleo |  90000 | 3 | 2 | 2 |
+| Dee  |  80000 | 4 | 4 | 3 |
+
+`ROW_NUMBER` is always unique; `RANK` shares the tie then **skips** to 4; `DENSE_RANK` shares then continues at 3. (Order *within* the tie is arbitrary unless you add a tiebreaker like `ORDER BY salary DESC, id`.)
 
 **Running total & moving average — frames:**
 ```sql
+-- Running total of order amounts over time (uses the orders table)
+SELECT order_date, amount,
+  SUM(amount) OVER (ORDER BY order_date) AS running_total
+FROM orders ORDER BY order_date;
+
+-- Moving average of the last 3 rows needs a dense daily series,
+-- so this uses an illustrative `daily_sales(sale_date, amount)` table:
 SELECT sale_date, amount,
-  SUM(amount) OVER (ORDER BY sale_date)                                       AS running_total,
   AVG(amount) OVER (ORDER BY sale_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS moving_avg_3
-FROM daily_sales;
+FROM daily_sales;   -- illustrative
 ```
 - **Frame gotcha:** with `ORDER BY` present, the default frame is `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`. That means `LAST_VALUE(...) OVER (ORDER BY x)` returns the *current* row, not the partition's last — because the frame ends at the current row. Fix by widening the frame: `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING`.
 - **Filtering on a window result:** window functions run at SELECT time, so they can't go in `WHERE`. Wrap in a CTE/subquery:
@@ -435,9 +543,16 @@ SELECT name FROM customers
 UNION ALL        -- rows in either, KEEP duplicates (faster — use unless you need dedup)
 SELECT name FROM employees;
 
-SELECT city FROM customers INTERSECT SELECT city FROM stores;   -- in both
-SELECT city FROM customers EXCEPT    SELECT city FROM stores;   -- in first but not second
+SELECT name FROM customers INTERSECT SELECT name FROM employees;  -- names in both
+SELECT name FROM employees EXCEPT   SELECT name FROM customers;   -- employees who aren't customers
 ```
+
+**Result** (customers = Ada, Bji, Cleo, Dee; employees = Ada, Bji, Cleo, Dee, Eli):
+
+- `UNION` → **5 rows**: Ada, Bji, Cleo, Dee, Eli
+- `UNION ALL` → **9 rows**: Ada, Bji, Cleo, Dee (from customers) + Ada, Bji, Cleo, Dee, Eli (from employees) — duplicates kept
+- `INTERSECT` → Ada, Bji, Cleo, Dee (names in both)
+- `EXCEPT` (employees − customers) → Eli
 
 - **`UNION` vs `UNION ALL`:** `UNION` de-duplicates (extra work); `UNION ALL` doesn't. Default to `UNION ALL` unless you specifically need duplicates gone.
 - Column **names** come from the first query; column **order/type** must line up across all queries.
@@ -469,10 +584,19 @@ FROM orders;
 ```sql
 SELECT
   customer_id,
-  SUM(CASE WHEN status = 'paid'      THEN amount ELSE 0 END) AS paid,
-  SUM(CASE WHEN status = 'cancelled' THEN amount ELSE 0 END) AS cancelled
+  SUM(CASE WHEN status = 'paid'      THEN amount ELSE 0 END)::numeric(10,2) AS paid,
+  SUM(CASE WHEN status = 'cancelled' THEN amount ELSE 0 END)::numeric(10,2) AS cancelled
 FROM orders GROUP BY customer_id;
 ```
+
+**Result:** each status becomes its own column (one row per customer):
+
+| customer_id | paid | cancelled |
+|------------:|-----:|----------:|
+| 1 | 350.00 |  0.00 |
+| 2 |   0.00 |  0.00 |
+| 3 | 300.00 | 50.00 |
+
 (Postgres also has `crosstab()` via the `tablefunc` extension for true pivots.)
 
 **Shorthands:** `COALESCE` (first non-NULL), `NULLIF`, `GREATEST(a,b,…)` / `LEAST(a,b,…)` (max/min across columns of one row).
@@ -557,6 +681,8 @@ WHERE order_date >= '2024-01-01' AND order_date < '2025-01-01'
 ```
 - **Prefer a date *range* over `EXTRACT(YEAR FROM col) = 2024`** in `WHERE` — wrapping the column in a function prevents index use (§21).
 - `date` vs `timestamp` vs `timestamptz`: use `timestamptz` when storing real-world event times (it's timezone-aware).
+
+→ Practice: [Monthly revenue](/problems/monthly-revenue)
 
 ---
 
@@ -647,7 +773,7 @@ DROP TABLE IF EXISTS temp_data;
 
 -- Indexes: speed up lookups/joins/sorts on the indexed columns
 CREATE INDEX idx_orders_customer ON orders (customer_id);
-CREATE UNIQUE INDEX idx_users_email ON users (lower(email));   -- expression index
+CREATE UNIQUE INDEX idx_emp_email ON employees (lower(email));   -- expression index
 CREATE INDEX idx_orders_paid ON orders (order_date) WHERE status = 'paid';  -- partial index (PG)
 
 -- Views: a saved query you can select from like a table
@@ -735,6 +861,9 @@ COMMIT;
 SELECT MAX(salary) FROM employees WHERE salary < (SELECT MAX(salary) FROM employees);
 -- or: SELECT DISTINCT salary FROM employees ORDER BY salary DESC LIMIT 1 OFFSET 1;
 ```
+**Result:** top salary is 120000, so the second-highest is **90000**.
+⚠️ **Edge case:** with only one distinct value (everyone earns the same), the `MAX(… < max)` form returns **NULL** and the `DISTINCT … OFFSET 1` form returns **no rows** — pick the shape whose "empty" answer you want.
+→ Practice: [Second-highest salary](/problems/second-highest-salary)
 
 **Top-N per group** (highest-paid per department):
 ```sql
@@ -742,33 +871,37 @@ WITH r AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY department_id ORDER BY sala
            FROM employees)
 SELECT * FROM r WHERE rn = 1;
 ```
+→ Practice: [Highest-paid per department](/problems/highest-paid-per-department), [Department top-3 salaries](/problems/department-top-3-salaries)
 
 **Latest row per key** (most recent order per customer):
 ```sql
 SELECT DISTINCT ON (customer_id) *          -- PG idiom
 FROM orders ORDER BY customer_id, order_date DESC;
 ```
+→ Practice: [Second order per customer](/problems/second-order-per-customer)
 
-**Deduplicate, keeping one** (lowest id per email):
+**Deduplicate, keeping one** (lowest id per email — `users` is an illustrative table):
 ```sql
 DELETE FROM users a USING users b
 WHERE a.email = b.email AND a.id > b.id;
 ```
+→ Practice: [Duplicate emails](/problems/duplicate-emails)
 
-**Running total / moving average:** see §11.
+**Running total / moving average:** see §11. → Practice: [Running total of daily sales](/problems/running-total-daily-sales), [3-day moving average](/problems/moving-average-3day)
 
-**Rows with no match (anti-join)** — customers who never ordered: §8 (`LEFT JOIN … IS NULL`) or `NOT EXISTS`.
+**Rows with no match (anti-join)** — customers who never ordered: §8 (`LEFT JOIN … IS NULL`) or `NOT EXISTS`. → Practice: [Customers who never order](/problems/customers-never-order), [Products never ordered](/problems/products-never-ordered)
 
-**Gaps in a sequence:**
+**Gaps in a sequence** (`seq` is an illustrative table):
 ```sql
 WITH s AS (SELECT id, LEAD(id) OVER (ORDER BY id) AS next_id FROM seq)
 SELECT id + 1 AS gap_start, next_id - 1 AS gap_end
 FROM s WHERE next_id - id > 1;
 ```
+→ Practice: [Gaps in a sequence](/problems/gaps-in-sequence)
 
 **Pivot (rows → columns):** conditional aggregation, §13.
 
-**Hierarchy / tree walk:** recursive CTE, §10.
+**Hierarchy / tree walk:** recursive CTE, §10. → Practice: [Recursive category tree](/problems/recursive-category-tree), [Tree node type](/problems/tree-node-type)
 
 **Percent of total** (each dept's share of payroll):
 ```sql

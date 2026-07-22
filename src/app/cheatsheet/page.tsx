@@ -16,7 +16,7 @@ export default function CheatsheetPage() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-8">
+    <main className="mx-auto w-full max-w-6xl px-6 py-8">
       <CheatsheetView content={content} />
     </main>
   );
