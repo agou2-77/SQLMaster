@@ -37,6 +37,12 @@ export default function RootLayout({
             </Link>
             <nav className="flex items-center gap-4 text-sm">
               <Link
+                href="/journey"
+                className="text-neutral-600 hover:text-emerald-600 dark:text-neutral-300 dark:hover:text-emerald-400"
+              >
+                Journey
+              </Link>
+              <Link
                 href="/problems"
                 className="text-neutral-600 hover:text-emerald-600 dark:text-neutral-300 dark:hover:text-emerald-400"
               >

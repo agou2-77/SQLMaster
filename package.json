@@ -9,7 +9,8 @@
     "lint": "eslint",
     "check:problems": "tsx scripts/self-check.ts",
     "check:compare": "tsx scripts/compare-check.ts",
-    "check": "npm run check:compare && npm run check:problems",
+    "check:clusters": "tsx scripts/check-clusters.ts",
+    "check": "npm run check:compare && npm run check:problems && npm run check:clusters",
     "e2e": "node scripts/e2e-smoke.mjs"
   },
   "dependencies": {

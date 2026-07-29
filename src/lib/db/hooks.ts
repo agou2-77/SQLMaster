@@ -1,7 +1,7 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { db, type ProgressRow } from "@/lib/db/dexie";
+import { db, type ProgressRow, type ModuleProgressRow } from "@/lib/db/dexie";
 import type { Problem } from "@/lib/problems/types";
 
 /**
@@ -32,5 +32,25 @@ export function useCustomProblems(): Problem[] | undefined {
   return useLiveQuery(async () => {
     const rows = await db.customProblems.orderBy("createdAt").toArray();
     return rows.map((r) => r.problem);
+  }, []);
+}
+
+/** Quiz/mastery progress for one module. `undefined` while loading. */
+export function useModuleProgress(moduleId: string): {
+  loading: boolean;
+  row: ModuleProgressRow | undefined;
+} {
+  const result = useLiveQuery(
+    async () => ({ row: await db.moduleProgress.get(moduleId) }),
+    [moduleId],
+  );
+  return { loading: result === undefined, row: result?.row };
+}
+
+/** Map of moduleId → ModuleProgressRow. `undefined` while loading. */
+export function useAllModuleProgress(): Map<string, ModuleProgressRow> | undefined {
+  return useLiveQuery(async () => {
+    const rows = await db.moduleProgress.toArray();
+    return new Map(rows.map((r) => [r.moduleId, r]));
   }, []);
 }

@@ -30,6 +30,17 @@ const BACK_TARGETS: Record<string, BackTarget> = {
 };
 const DEFAULT_BACK = BACK_TARGETS.problems;
 
+// Resolve the back-link. The journey opens drills with `from=journey&m=<id>`,
+// so it needs a dynamic target back to the specific module.
+function resolveBack(from: string | null, moduleId: string | null): BackTarget {
+  if (from === "journey") {
+    return moduleId
+      ? { href: `/journey/${moduleId}`, label: "← Back to module" }
+      : { href: "/journey", label: "← Journey" };
+  }
+  return (from && BACK_TARGETS[from]) || DEFAULT_BACK;
+}
+
 export default function ProblemWorkspacePage() {
   // useSearchParams() requires a Suspense boundary in the App Router.
   return (
@@ -45,8 +56,8 @@ export default function ProblemWorkspacePage() {
 
 function ProblemWorkspace() {
   const { id } = useParams<{ id: string }>();
-  const from = useSearchParams().get("from");
-  const back = (from && BACK_TARGETS[from]) || DEFAULT_BACK;
+  const search = useSearchParams();
+  const back = resolveBack(search.get("from"), search.get("m"));
   const custom = useCustomProblems();
   const { loading: progressLoading, row: progress } = useProblemProgress(id);
   const problem = useMemo(() => getProblemById(id, custom ?? []), [id, custom]);
