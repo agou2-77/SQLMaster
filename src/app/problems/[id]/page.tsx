@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getProblemById } from "@/lib/problems/registry";
+import { getProblemById, mergeProblems } from "@/lib/problems/registry";
+import { getModuleById } from "@/data/modules";
+import { PATHS } from "@/data/paths";
 import { usePglite } from "@/lib/pglite/usePglite";
 import { recordAttempt } from "@/lib/db/dexie";
 import { useProblemProgress, useCustomProblems } from "@/lib/db/hooks";
 import { compareResults, type CompareResult } from "@/lib/validation/compareResults";
-import type { RunResult } from "@/lib/problems/types";
+import type { RunResult, Problem } from "@/lib/problems/types";
 import { SqlEditor } from "@/components/editor/SqlEditor";
 import { RunBar } from "@/components/workspace/RunBar";
 import { ResultsGrid } from "@/components/workspace/ResultsGrid";
@@ -41,6 +43,62 @@ function resolveBack(from: string | null, moduleId: string | null): BackTarget {
   return (from && BACK_TARGETS[from]) || DEFAULT_BACK;
 }
 
+type NextTarget = { href: string; label: string };
+
+// Resolve the "next" link from the same navigation context as the back link.
+// The sequence depends on where the learner came from:
+//   journey → the next drill in the module, then the mastery quiz
+//   paths   → the next problem in the path (needs the path id via `&p=`)
+//   problems / default → the next problem in the merged library order
+// Always returns a target so the Next button is never a dead end; at the end of
+// a sequence it points back to the relevant list.
+function resolveNext(
+  from: string | null,
+  moduleId: string | null,
+  pathId: string | null,
+  currentId: string,
+  library: Problem[],
+): NextTarget {
+  if (from === "journey" && moduleId) {
+    const mod = getModuleById(moduleId);
+    const i = mod?.drills.findIndex((d) => d.id === currentId) ?? -1;
+    if (mod && i >= 0 && i < mod.drills.length - 1) {
+      const drill = mod.drills[i + 1];
+      return {
+        href: `/problems/${drill.id}?from=journey&m=${moduleId}`,
+        label: "Next drill →",
+      };
+    }
+    // Past the last drill → prove mastery, if the module has a quiz.
+    if (mod && mod.quiz.length > 0) {
+      return { href: `/journey/${moduleId}/quiz`, label: "Take the mastery quiz →" };
+    }
+    return { href: `/journey/${moduleId}`, label: "Module overview →" };
+  }
+
+  if (from === "paths" && pathId) {
+    const path = PATHS.find((p) => p.id === pathId);
+    const i = path?.problemIds.indexOf(currentId) ?? -1;
+    if (path && i >= 0 && i < path.problemIds.length - 1) {
+      return {
+        href: `/problems/${path.problemIds[i + 1]}?from=paths&p=${pathId}`,
+        label: "Next in path →",
+      };
+    }
+    return { href: "/paths", label: "All learning paths →" };
+  }
+
+  // problems context / default: the next problem in the merged library order.
+  const i = library.findIndex((p) => p.id === currentId);
+  if (i >= 0 && i < library.length - 1) {
+    return {
+      href: `/problems/${library[i + 1].id}?from=problems`,
+      label: "Next problem →",
+    };
+  }
+  return { href: "/problems", label: "All problems →" };
+}
+
 export default function ProblemWorkspacePage() {
   // useSearchParams() requires a Suspense boundary in the App Router.
   return (
@@ -57,10 +115,17 @@ export default function ProblemWorkspacePage() {
 function ProblemWorkspace() {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
-  const back = resolveBack(search.get("from"), search.get("m"));
+  const from = search.get("from");
+  const moduleId = search.get("m");
+  const pathId = search.get("p");
+  const back = resolveBack(from, moduleId);
   const custom = useCustomProblems();
   const { loading: progressLoading, row: progress } = useProblemProgress(id);
   const problem = useMemo(() => getProblemById(id, custom ?? []), [id, custom]);
+  const next = useMemo(
+    () => resolveNext(from, moduleId, pathId, id, mergeProblems(custom ?? [])),
+    [from, moduleId, pathId, id, custom],
+  );
 
   if (!problem) {
     // Custom problems load asynchronously from IndexedDB; wait before 404-ing.
@@ -86,6 +151,7 @@ function ProblemWorkspace() {
       problem={problem}
       initialSql={progress?.lastSql ?? ""}
       back={back}
+      next={next}
     />
   );
 }
@@ -94,10 +160,12 @@ function Workspace({
   problem,
   initialSql,
   back,
+  next,
 }: {
   problem: NonNullable<ReturnType<typeof getProblemById>>;
   initialSql: string;
   back: BackTarget;
+  next: NextTarget;
 }) {
   const { ready, bootError, schema, runUser, runReference } = usePglite(problem);
   const { row: progress } = useProblemProgress(problem.id);
@@ -259,6 +327,7 @@ function Workspace({
           running={running}
           ready={ready}
           solutionShown={solutionShown}
+          next={next}
         />
 
         {solutionShown && (

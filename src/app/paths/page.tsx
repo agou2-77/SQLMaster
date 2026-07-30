@@ -52,7 +52,7 @@ export default function PathsPage() {
                     p && (
                       <li key={p.id}>
                         <Link
-                          href={`/problems/${p.id}?from=paths`}
+                          href={`/problems/${p.id}?from=paths&p=${path.id}`}
                           className="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 dark:hover:bg-neutral-900/50"
                         >
                           <StatusPill status={progress?.get(p.id)?.status} />
