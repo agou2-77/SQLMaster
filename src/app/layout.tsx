@@ -32,7 +32,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <header className="border-b border-neutral-200 dark:border-neutral-800">
           <div className="mx-auto flex max-w-6xl items-center gap-5 px-6 py-3">
-            <Link href="/problems" className="text-lg font-bold">
+            <Link href="/" className="text-lg font-bold">
               SQL<span className="text-emerald-600">Master</span>
             </Link>
             <nav className="flex items-center gap-4 text-sm">
